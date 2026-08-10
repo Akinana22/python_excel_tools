@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号 (如 1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package user-facing files
+        run: |
+          zip -r excel-tools-v${{ inputs.version }}.zip \
+            run.py \
+            wheels/ \
+            excel_tools/ \
+            -x "*__pycache__*" "*.pytest_cache*" "excel_tools/__pycache__*"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          files: excel-tools-v${{ inputs.version }}.zip
+          generate_release_notes: true
