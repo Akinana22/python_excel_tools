@@ -5,6 +5,7 @@ import sys
 
 BACK = "0"       # 返回上一级菜单
 TO_MAIN = "q"    # 返回主菜单
+VIEW = "s"       # 查看已有条件
 
 
 def clear_screen():
@@ -14,17 +15,19 @@ def clear_screen():
         os.system("clear")
 
 
-def get_input(prompt, allow_back=True, allow_main=True):
+def get_input(prompt, allow_back=True, allow_main=True, allow_view=False):
     """获取用户输入。
 
     Returns:
-        用户输入字符串 / BACK / TO_MAIN
+        用户输入字符串 / BACK / TO_MAIN / VIEW
     """
     hints = []
     if allow_back:
         hints.append("[0]返回")
     if allow_main:
         hints.append("[q]主菜单")
+    if allow_view:
+        hints.append("[s]查看条件")
     hint_str = " ".join(hints)
     display = f"{prompt} ({hint_str}): " if hints else f"{prompt}: "
 
@@ -39,23 +42,27 @@ def get_input(prompt, allow_back=True, allow_main=True):
             return TO_MAIN
         if allow_back and value == "0":
             return BACK
+        if allow_view and value.lower() == "s":
+            return VIEW
         if value == "":
             print("  输入不能为空，请重新输入")
             continue
         return value
 
 
-def get_input_allow_empty(prompt, allow_back=True, allow_main=True):
+def get_input_allow_empty(prompt, allow_back=True, allow_main=True, allow_view=False):
     """获取用户输入，允许空输入。
 
     Returns:
-        用户输入字符串（可能为空）/ BACK / TO_MAIN
+        用户输入字符串（可能为空）/ BACK / TO_MAIN / VIEW
     """
     hints = []
     if allow_back:
         hints.append("[0]返回")
     if allow_main:
         hints.append("[q]主菜单")
+    if allow_view:
+        hints.append("[s]查看条件")
     hint_str = " ".join(hints)
     display = f"{prompt} ({hint_str}): " if hints else f"{prompt}: "
 
@@ -70,6 +77,8 @@ def get_input_allow_empty(prompt, allow_back=True, allow_main=True):
             return TO_MAIN
         if allow_back and value == "0":
             return BACK
+        if allow_view and value.lower() == "s":
+            return VIEW
         return value
 
 
@@ -85,11 +94,11 @@ def print_step(step):
     print(f"\n  >> {step}")
 
 
-def select_from_list(options, prompt="请选择", allow_back=True, allow_main=True):
+def select_from_list(options, prompt="请选择", allow_back=True, allow_main=True, allow_view=False):
     """展示编号列表让用户选择。
 
     Returns:
-        选中项的索引(0-based) / BACK / TO_MAIN
+        选中项的索引(0-based) / BACK / TO_MAIN / VIEW
     """
     for idx, opt in enumerate(options, start=1):
         print(f"  [{idx}] {opt}")
@@ -97,6 +106,8 @@ def select_from_list(options, prompt="请选择", allow_back=True, allow_main=Tr
         print("  [0] 返回上级")
     if allow_main:
         print("  [q] 返回主菜单")
+    if allow_view:
+        print("  [s] 查看已有条件")
 
     while True:
         raw = input(f"\n{prompt} (输入编号): ").strip()
@@ -104,6 +115,8 @@ def select_from_list(options, prompt="请选择", allow_back=True, allow_main=Tr
             return TO_MAIN
         if raw == "0" and allow_back:
             return BACK
+        if raw.lower() == "s" and allow_view:
+            return VIEW
         if raw.isdigit() and 1 <= int(raw) <= len(options):
             return int(raw) - 1
         print("  请输入有效编号")

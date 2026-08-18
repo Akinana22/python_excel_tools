@@ -6,7 +6,7 @@ import sys
 from .menu_utils import (
     clear_screen, print_header, print_step,
     get_input, get_input_allow_empty, select_from_list,
-    BACK, TO_MAIN,
+    BACK, TO_MAIN, VIEW,
 )
 from .file_browser import browse_files
 from .excel_io import read_headers
@@ -21,21 +21,53 @@ from .format_converter import convert_to_csv
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+CATEGORY_SHORT = {"number": "数值", "time": "时间", "content": "内容"}
 
-def _select_column(headers):
+
+def _show_conditions(conditions):
+    """显示已有条件，并支持按序号删除。"""
+    while True:
+        clear_screen()
+        print_header("已有条件")
+        if not conditions:
+            print("  (暂无已有条件)")
+        else:
+            for i, (col, category, op, val) in enumerate(conditions, 1):
+                cat = CATEGORY_SHORT[category]
+                op_label = OPERATOR_LABELS[op]
+                if op in ("is_null", "not_null"):
+                    print(f"  {i}. {col} {cat} {op_label}")
+                else:
+                    print(f"  {i}. {col} {cat} {op_label} {val}")
+        print()
+        print("  [0] 返回")
+        raw = input("\n  输入序号删除条件 (输入编号, [0]返回): ").strip()
+        if raw == "0":
+            return
+        if raw.isdigit() and 1 <= int(raw) <= len(conditions):
+            del conditions[int(raw) - 1]
+            print("  已删除该条件")
+        else:
+            print("  请输入有效编号")
+
+
+def _select_column(headers, conditions=None):
     """列出所有列名让用户选编号。返回列名 / BACK / TO_MAIN。"""
-    clear_screen()
-    print_header("选择列")
-    result = select_from_list(headers, "请选择列")
-    if result == BACK or result == TO_MAIN:
-        return result
-    return headers[result]
+    allow_view = conditions is not None
+    while True:
+        clear_screen()
+        print_header("选择列")
+        result = select_from_list(headers, "请选择列", allow_view=allow_view)
+        if result == VIEW:
+            _show_conditions(conditions)
+            continue
+        if result == BACK or result == TO_MAIN:
+            return result
+        return headers[result]
 
 
-def _select_operator(category):
+def _select_operator(category, conditions):
     """按类别选择操作符。返回操作符 / BACK / TO_MAIN。"""
-    clear_screen()
-    print_header(f"选择操作符 ({CATEGORIES[category]})")
     if category == "number":
         ops = NUMBER_OPERATORS
     elif category == "time":
@@ -43,19 +75,31 @@ def _select_operator(category):
     else:
         ops = CONTENT_OPERATORS
     labels = [OPERATOR_LABELS[op] for op in ops]
-    result = select_from_list(labels, "请选择操作符")
-    if result == BACK or result == TO_MAIN:
-        return result
-    return ops[result]
+    while True:
+        clear_screen()
+        print_header(f"选择操作符 ({CATEGORIES[category]})")
+        result = select_from_list(labels, "请选择操作符", allow_view=True)
+        if result == VIEW:
+            _show_conditions(conditions)
+            continue
+        if result == BACK or result == TO_MAIN:
+            return result
+        return ops[result]
 
 
-def _input_value(category, op):
+def _input_value(category, op, conditions):
     """按类别和操作符输入值。返回输入值 / BACK / TO_MAIN。"""
     if op in ("is_null", "not_null"):
         return ""
-    if category == "time":
-        return get_input("请输入时间值 (如 2024-01-15 17:00:00)")
-    return get_input("请输入比较值")
+    while True:
+        if category == "time":
+            val = get_input("请输入时间值 (如 2024-01-15 17:00:00)", allow_view=True)
+        else:
+            val = get_input("请输入比较值", allow_view=True)
+        if val == VIEW:
+            _show_conditions(conditions)
+            continue
+        return val
 
 
 def _collect_conditions(headers):
@@ -63,7 +107,7 @@ def _collect_conditions(headers):
     conditions = []
 
     while True:
-        col = _select_column(headers)
+        col = _select_column(headers, conditions)
         if col == TO_MAIN:
             return TO_MAIN
         if col == BACK:
@@ -72,9 +116,15 @@ def _collect_conditions(headers):
             return BACK
 
         while True:
-            cat_idx = select_from_list(
-                [CATEGORIES[c] for c in CATEGORY_ORDER], "请选择比较对象"
-            )
+            while True:
+                cat_idx = select_from_list(
+                    [CATEGORIES[c] for c in CATEGORY_ORDER], "请选择比较对象",
+                    allow_view=True,
+                )
+                if cat_idx == VIEW:
+                    _show_conditions(conditions)
+                    continue
+                break
             if cat_idx == TO_MAIN:
                 return TO_MAIN
             if cat_idx == BACK:
@@ -82,13 +132,13 @@ def _collect_conditions(headers):
             category = CATEGORY_ORDER[cat_idx]
 
             while True:
-                op = _select_operator(category)
+                op = _select_operator(category, conditions)
                 if op == TO_MAIN:
                     return TO_MAIN
                 if op == BACK:
                     break
 
-                val = _input_value(category, op)
+                val = _input_value(category, op, conditions)
                 if val == TO_MAIN:
                     return TO_MAIN
                 if val == BACK:
@@ -104,18 +154,22 @@ def _collect_conditions(headers):
                 return conditions
 
 
-def _select_mode(action):
+def _select_mode(action, conditions):
     """选择模式。返回 "any"/"all" / BACK / TO_MAIN。"""
-    clear_screen()
-    print_header("选择模式")
     if action == "delete":
         modes = ["任意条件满足→删除", "全部条件满足→删除"]
     else:
         modes = ["任意条件满足→保留", "全部条件满足→保留"]
-    result = select_from_list(modes, "请选择模式")
-    if result == BACK or result == TO_MAIN:
-        return result
-    return "any" if result == 0 else "all"
+    while True:
+        clear_screen()
+        print_header("选择模式")
+        result = select_from_list(modes, "请选择模式", allow_view=True)
+        if result == VIEW:
+            _show_conditions(conditions)
+            continue
+        if result == BACK or result == TO_MAIN:
+            return result
+        return "any" if result == 0 else "all"
 
 
 def _unique_path(path):
@@ -198,31 +252,33 @@ def _menu_filter(action):
 
         headers = read_headers(file_path)
 
-        conditions = _collect_conditions(headers)
-        if conditions == TO_MAIN:
-            return
-        if conditions == BACK:
-            continue
-        if not conditions:
-            print("\n  未添加任何条件")
-            input("  按回车继续...")
-            continue
+        while True:
+            conditions = _collect_conditions(headers)
+            if conditions == TO_MAIN:
+                return
+            if conditions == BACK:
+                break
+            if not conditions:
+                print("\n  未添加任何条件")
+                input("  按回车继续...")
+                continue
 
-        mode = _select_mode(action)
-        if mode == TO_MAIN:
-            return
-        if mode == BACK:
-            continue
+            while True:
+                mode = _select_mode(action, conditions)
+                if mode == TO_MAIN:
+                    return
+                if mode == BACK:
+                    break
 
-        output_path = _get_filter_output_path(file_path)
-        if output_path == TO_MAIN:
-            return
-        if output_path == BACK:
-            continue
+                output_path = _get_filter_output_path(file_path)
+                if output_path == TO_MAIN:
+                    return
+                if output_path == BACK:
+                    continue
 
-        _execute_filter(file_path, output_path, conditions, mode, action)
-        input("\n  按回车返回主菜单...")
-        return
+                _execute_filter(file_path, output_path, conditions, mode, action)
+                input("\n  按回车返回主菜单...")
+                return
 
 
 def _menu_split():
