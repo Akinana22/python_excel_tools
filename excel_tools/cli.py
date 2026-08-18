@@ -16,7 +16,7 @@ from .row_filter import (
     NUMBER_OPERATORS, TIME_OPERATORS, CONTENT_OPERATORS,
     OPERATOR_LABELS,
 )
-from .table_splitter import split_by_column
+from .table_splitter import split_by_column, split_by_rows
 from .format_converter import convert_to_csv
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -281,6 +281,28 @@ def _menu_filter(action):
                 return
 
 
+def _select_split_column(headers):
+    """拆分列选择：输入编号按列拆分，直接回车仅按行数拆分。"""
+    while True:
+        clear_screen()
+        print_header("选择拆分依据")
+        for idx, h in enumerate(headers, 1):
+            print(f"  [{idx}] {h}")
+        print("  [回车] 不按列，仅按行数拆分")
+        print("  [0] 返回上级")
+        print("  [q] 返回主菜单")
+        raw = input("\n请选择列 (输入编号或直接回车): ").strip()
+        if raw.lower() == "q":
+            return TO_MAIN
+        if raw == "0":
+            return BACK
+        if raw == "":
+            return ""
+        if raw.isdigit() and 1 <= int(raw) <= len(headers):
+            return headers[int(raw) - 1]
+        print("  请输入有效编号")
+
+
 def _menu_split():
     """表格拆分流程。"""
     while True:
@@ -293,20 +315,30 @@ def _menu_split():
         print(f"\n  已选择: {file_path}")
 
         headers = read_headers(file_path)
-        col = _select_column(headers)
+        col = _select_split_column(headers)
         if col == TO_MAIN:
             return
         if col == BACK:
             continue
 
-        rows_input = get_input_allow_empty("输入每子表行数 (不拆分则输入 0 或直接回车)")
-        if rows_input == TO_MAIN:
-            return
-        if rows_input == BACK:
-            continue
-        rows_per_file = None
-        if rows_input.strip().isdigit() and int(rows_input.strip()) > 0:
-            rows_per_file = int(rows_input.strip())
+        if col == "":
+            rows_input = get_input_allow_empty("输入每子表行数 (默认 5)")
+            if rows_input == TO_MAIN:
+                return
+            if rows_input == BACK:
+                continue
+            rows_per_file = 5
+            if rows_input.strip().isdigit() and int(rows_input.strip()) > 0:
+                rows_per_file = int(rows_input.strip())
+        else:
+            rows_input = get_input_allow_empty("输入每子表行数 (不拆分则输入 0 或直接回车)")
+            if rows_input == TO_MAIN:
+                return
+            if rows_input == BACK:
+                continue
+            rows_per_file = None
+            if rows_input.strip().isdigit() and int(rows_input.strip()) > 0:
+                rows_per_file = int(rows_input.strip())
 
         fmt = _choose_output_format(file_path)
         if fmt == TO_MAIN:
@@ -317,7 +349,10 @@ def _menu_split():
         clear_screen()
         print_header("表格拆分 - 执行中")
         try:
-            files = split_by_column(file_path, col, rows_per_file, fmt)
+            if col == "":
+                files = split_by_rows(file_path, rows_per_file, fmt)
+            else:
+                files = split_by_column(file_path, col, rows_per_file, fmt)
             print(f"\n  ✅ 拆分完成！共生成 {len(files)} 个文件:")
             for f in files:
                 print(f"    · {os.path.basename(f)}")

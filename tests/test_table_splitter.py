@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from excel_tools.excel_io import read_table
-from excel_tools.table_splitter import split_by_column
+from excel_tools.table_splitter import split_by_column, split_by_rows
 
 
 HEADERS = ["Name", "Category", "Score"]
@@ -97,3 +97,33 @@ class TestSplitByColumn:
             w.writerows(ROWS)
         files = split_by_column(csv_path, "Category")
         assert len(files) == 3
+
+
+class TestSplitByRows:
+    def test_split_count(self, sample_xlsx):
+        files = split_by_rows(sample_xlsx, 2)
+        assert len(files) == 3
+
+    def test_output_in_subfolder(self, sample_xlsx):
+        files = split_by_rows(sample_xlsx, 2)
+        expected_dir = os.path.join(os.path.dirname(sample_xlsx), "test_split")
+        for f in files:
+            assert os.path.dirname(f) == expected_dir
+
+    def test_naming(self, sample_xlsx):
+        files = split_by_rows(sample_xlsx, 2)
+        names = sorted(os.path.basename(f) for f in files)
+        assert names == ["test_split-01.xlsx", "test_split-02.xlsx", "test_split-03.xlsx"]
+
+    def test_row_count(self, sample_xlsx):
+        files = split_by_rows(sample_xlsx, 2)
+        _, rows = read_table(files[0])
+        assert len(rows) == 2
+        _, rows = read_table(files[-1])
+        assert len(rows) == 2
+
+    def test_csv_output(self, sample_xlsx):
+        files = split_by_rows(sample_xlsx, 3, output_format="csv")
+        assert len(files) == 2
+        for f in files:
+            assert f.endswith(".csv")

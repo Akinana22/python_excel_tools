@@ -31,6 +31,44 @@ def _split_file_by_count(file_path, rows_per_file, output_format):
     return generated
 
 
+def split_by_rows(file_path, rows_per_file, output_format="xlsx"):
+    """按行数拆分整个表格（不以列为依据）。
+
+    Args:
+        file_path: 源文件路径
+        rows_per_file: 每文件行数
+        output_format: 输出格式 "xlsx" | "csv"
+
+    Returns:
+        生成的所有文件路径列表（不含原始文件）
+    """
+    headers, rows = read_table(file_path)
+    total_rows = len(rows)
+    if total_rows == 0:
+        return []
+    total_files = math.ceil(total_rows / rows_per_file)
+    pad_width = max(2, len(str(total_files)))
+
+    dir_name = os.path.dirname(file_path)
+    base = os.path.splitext(os.path.basename(file_path))[0]
+    ext = "." + output_format
+    output_dir = os.path.join(dir_name, base)
+    os.makedirs(output_dir, exist_ok=True)
+    generated = []
+
+    for i in range(total_files):
+        start = i * rows_per_file
+        end = min(start + rows_per_file, total_rows)
+        chunk = rows[start:end]
+        num_str = str(i + 1).zfill(pad_width)
+        out_name = f"{base}-{num_str}{ext}"
+        out_path = os.path.join(output_dir, out_name)
+        write_table(out_path, headers, chunk)
+        generated.append(out_path)
+
+    return generated
+
+
 def split_by_column(file_path, column, rows_per_file=None, output_format="xlsx"):
     """按指定列拆分表格，可选二级按行数拆分。
 
