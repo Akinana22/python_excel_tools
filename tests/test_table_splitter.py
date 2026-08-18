@@ -40,7 +40,6 @@ def sample_xlsx(tmp_path):
 
 class TestSplitByColumn:
     def test_output_in_subfolder(self, sample_xlsx):
-        """输出应在以原文件名命名的文件夹下。"""
         files = split_by_column(sample_xlsx, "Category")
         expected_dir = os.path.join(os.path.dirname(sample_xlsx), "test_split")
         assert len(files) == 3
@@ -72,6 +71,18 @@ class TestSplitByColumn:
     def test_with_row_split_sub_files(self, sample_xlsx):
         files = split_by_column(sample_xlsx, "Category", rows_per_file=2)
         assert len(files) == 5
+
+    def test_csv_output_format(self, sample_xlsx):
+        files = split_by_column(sample_xlsx, "Category", output_format="csv")
+        assert len(files) == 3
+        for f in files:
+            assert f.endswith(".csv")
+
+    def test_csv_output_with_row_split(self, sample_xlsx):
+        files = split_by_column(sample_xlsx, "Category", rows_per_file=2, output_format="csv")
+        assert len(files) == 5
+        for f in files:
+            assert f.endswith(".csv")
 
     def test_column_not_found(self, sample_xlsx):
         with pytest.raises(ValueError, match="不存在"):

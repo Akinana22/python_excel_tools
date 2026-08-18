@@ -1,8 +1,8 @@
 """文件浏览器：支持子目录浏览的交互式表格文件选择器"""
 
 import os
-import sys
-from .menu_utils import clear_screen, print_header
+
+from .menu_utils import clear_screen, print_header, BACK, TO_MAIN
 
 TABLE_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
@@ -19,7 +19,7 @@ def browse_files(start_dir):
         start_dir: 起始浏览目录
 
     Returns:
-        选中的文件完整路径，None 表示用户取消选择
+        选中的文件完整路径 / BACK / TO_MAIN
     """
     current_dir = os.path.abspath(start_dir)
 
@@ -33,11 +33,8 @@ def browse_files(start_dir):
             entries = sorted(os.listdir(current_dir))
         except PermissionError:
             print("  [错误] 无权限访问该目录")
-            if _go_parent(current_dir) != current_dir:
-                current_dir = _go_parent(current_dir)
-                continue
-            input("\n  按回车返回上级...")
-            return None
+            input("  按回车返回上级...")
+            return BACK
 
         dirs = []
         files = []
@@ -67,17 +64,17 @@ def browse_files(start_dir):
             mapping[idx] = f
             idx += 1
 
-        print(f"  [0] 返回上级菜单")
+        print("  [0] 返回上级")
+        print("  [q] 返回主菜单")
 
         if idx == 1:
             print("\n  (该目录下没有表格文件)")
 
-        raw = input(f"\n  请选择 (输入编号, [0]返回, [q]退出): ").strip()
+        raw = input("\n  请选择 (输入编号): ").strip()
         if raw.lower() == "q":
-            print("\n已退出程序")
-            sys.exit(0)
+            return TO_MAIN
         if raw == "0":
-            return None
+            return BACK
         if not raw.isdigit():
             print("  请输入有效编号")
             input("  按回车继续...")
@@ -99,13 +96,12 @@ def browse_files(start_dir):
             current_dir = target_path
             continue
 
-        confirmed = input(f"\n  已选择: {target_path}\n  确认? (y/n, [0]返回, [q]退出): ").strip().lower()
+        confirmed = input(f"\n  已选择: {target_path}\n  确认? (y/n, [0]返回, [q]主菜单): ").strip().lower()
         if confirmed == "q":
-            print("\n已退出程序")
-            sys.exit(0)
+            return TO_MAIN
         if confirmed == "0":
             continue
-        if confirmed == "y" or confirmed == "yes":
+        if confirmed in ("y", "yes"):
             return target_path
 
 

@@ -1,10 +1,10 @@
-"""通用菜单工具：输入获取、清屏、退出处理"""
+"""通用菜单工具：输入获取、清屏、导航处理"""
 
 import os
 import sys
 
-EXIT_KEYWORD = "q"
-BACK_KEYWORD = "0"
+BACK = "0"       # 返回上一级菜单
+TO_MAIN = "q"    # 返回主菜单
 
 
 def clear_screen():
@@ -14,49 +14,66 @@ def clear_screen():
         os.system("clear")
 
 
-def get_input(prompt, allow_back = True, allow_quit = True):
-    """获取用户输入，支持返回上级和退出。
+def get_input(prompt, allow_back=True, allow_main=True):
+    """获取用户输入。
 
     Returns:
-        用户输入的字符串，若返回 None 表示用户选择退出，
-        若返回 BACK_KEYWORD 表示用户选择返回上级。
+        用户输入字符串 / BACK / TO_MAIN
     """
     hints = []
     if allow_back:
         hints.append("[0]返回")
-    if allow_quit:
-        hints.append("[q]退出")
+    if allow_main:
+        hints.append("[q]主菜单")
     hint_str = " ".join(hints)
-    display_prompt = f"{prompt} ({hint_str}): "
+    display = f"{prompt} ({hint_str}): " if hints else f"{prompt}: "
 
     while True:
         try:
-            value = input(display_prompt).strip()
+            value = input(display).strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n已退出程序")
+            print()
             sys.exit(0)
 
-        if allow_quit and value.lower() == EXIT_KEYWORD:
-            print("\n已退出程序")
-            sys.exit(0)
-        if allow_back and value == BACK_KEYWORD:
-            return BACK_KEYWORD
+        if allow_main and value.lower() == "q":
+            return TO_MAIN
+        if allow_back and value == "0":
+            return BACK
         if value == "":
             print("  输入不能为空，请重新输入")
             continue
         return value
 
 
-def get_input_or_back(prompt):
-    """获取输入，允许返回上级和退出。返回 None 表示用户取消。"""
-    result = get_input(prompt, allow_back=True, allow_quit=True)
-    if result == BACK_KEYWORD:
-        return None
-    return result
+def get_input_allow_empty(prompt, allow_back=True, allow_main=True):
+    """获取用户输入，允许空输入。
+
+    Returns:
+        用户输入字符串（可能为空）/ BACK / TO_MAIN
+    """
+    hints = []
+    if allow_back:
+        hints.append("[0]返回")
+    if allow_main:
+        hints.append("[q]主菜单")
+    hint_str = " ".join(hints)
+    display = f"{prompt} ({hint_str}): " if hints else f"{prompt}: "
+
+    while True:
+        try:
+            value = input(display).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            sys.exit(0)
+
+        if allow_main and value.lower() == "q":
+            return TO_MAIN
+        if allow_back and value == "0":
+            return BACK
+        return value
 
 
-def print_header(title, width = 50):
-    """打印格式化标题。"""
+def print_header(title, width=50):
     print()
     print("=" * width)
     print(f"  {title}")
@@ -65,38 +82,28 @@ def print_header(title, width = 50):
 
 
 def print_step(step):
-    """打印步骤提示。"""
     print(f"\n  >> {step}")
 
 
-def select_from_list(options, prompt = "请选择", allow_back = True):
-    """展示编号列表让用户选择，返回选中的索引(0-based)，None 表示取消或返回。
-
-    Args:
-        options: 选项文本列表
-        prompt: 提示语
-        allow_back: 是否显示返回选项
+def select_from_list(options, prompt="请选择", allow_back=True, allow_main=True):
+    """展示编号列表让用户选择。
 
     Returns:
-        选中的索引，None 表示用户选择返回
+        选中项的索引(0-based) / BACK / TO_MAIN
     """
     for idx, opt in enumerate(options, start=1):
         print(f"  [{idx}] {opt}")
     if allow_back:
-        print(f"  [0] 返回上级")
+        print("  [0] 返回上级")
+    if allow_main:
+        print("  [q] 返回主菜单")
 
     while True:
-        raw = input(f"\n{prompt} (输入编号, [0]返回, [q]退出): ").strip()
-        if raw.lower() == "q":
-            print("\n已退出程序")
-            sys.exit(0)
+        raw = input(f"\n{prompt} (输入编号): ").strip()
+        if raw.lower() == "q" and allow_main:
+            return TO_MAIN
         if raw == "0" and allow_back:
-            return None
-        if not raw.isdigit():
-            print("  请输入有效编号")
-            continue
-        num = int(raw)
-        if 1 <= num <= len(options):
-            return num - 1
-        else:
-            print(f"  请输入 1~{len(options)} 之间的编号")
+            return BACK
+        if raw.isdigit() and 1 <= int(raw) <= len(options):
+            return int(raw) - 1
+        print("  请输入有效编号")

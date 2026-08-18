@@ -1,13 +1,14 @@
-"""测试条件删除行"""
+"""测试条件删除/保留行"""
 
 import os
 import sys
+from datetime import datetime
 import openpyxl
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from excel_tools.excel_io import read_table
-from excel_tools.row_filter import filter_rows, _check_condition
+from excel_tools.row_filter import filter_rows, _check_condition, _try_date
 
 
 HEADERS = ["Name", "Age", "Score", "City"]
@@ -38,85 +39,139 @@ def sample_xlsx(tmp_path):
 
 
 class TestCheckCondition:
-    def test_eq(self):
-        assert _check_condition("NY", "==", "NY") is True
-        assert _check_condition("LA", "==", "NY") is False
+    def test_number_gt(self):
+        assert _check_condition(30, "number", ">", "25") is True
+        assert _check_condition(17, "number", ">", "25") is False
 
-    def test_neq(self):
-        assert _check_condition("LA", "!=", "NY") is True
-        assert _check_condition("NY", "!=", "NY") is False
+    def test_number_eq(self):
+        assert _check_condition(25, "number", "==", "25") is True
 
-    def test_gt(self):
-        assert _check_condition(30, ">", "25") is True
-        assert _check_condition(17, ">", "25") is False
+    def test_number_lt(self):
+        assert _check_condition(17, "number", "<", "25") is True
 
-    def test_lt(self):
-        assert _check_condition(17, "<", "25") is True
-        assert _check_condition(30, "<", "25") is False
+    def test_content_contains(self):
+        assert _check_condition("Alice", "content", "contains", "li") is True
+        assert _check_condition("Bob", "content", "contains", "li") is False
 
-    def test_gte(self):
-        assert _check_condition(25, ">=", "25") is True
+    def test_content_not_contains(self):
+        assert _check_condition("Bob", "content", "not_contains", "li") is True
 
-    def test_lte(self):
-        assert _check_condition(25, "<=", "25") is True
+    def test_content_is_null(self):
+        assert _check_condition(None, "content", "is_null", "") is True
+        assert _check_condition("", "content", "is_null", "") is True
+        assert _check_condition("NY", "content", "is_null", "") is False
 
-    def test_contains(self):
-        assert _check_condition("Alice", "contains", "li") is True
-        assert _check_condition("Bob", "contains", "li") is False
+    def test_content_not_null(self):
+        assert _check_condition("NY", "content", "not_null", "") is True
+        assert _check_condition(None, "content", "not_null", "") is False
 
-    def test_not_contains(self):
-        assert _check_condition("Bob", "not_contains", "li") is True
-        assert _check_condition("Alice", "not_contains", "li") is False
+    def test_time_gt(self):
+        assert _check_condition("2024-01-15 17:00:00", "time", ">", "2024-01-15 00:00:00") is True
+        assert _check_condition("2024-01-15 00:00:00", "time", ">", "2024-01-15 17:00:00") is False
 
-    def test_is_null(self):
-        assert _check_condition(None, "is_null", "") is True
-        assert _check_condition("", "is_null", "") is True
-        assert _check_condition("NY", "is_null", "") is False
+    def test_time_eq_datetime_object(self):
+        cell = datetime(2024, 1, 15, 17, 0, 0)
+        assert _check_condition(cell, "time", "==", "2024-01-15 17:00:00") is True
 
-    def test_not_null(self):
-        assert _check_condition("NY", "not_null", "") is True
-        assert _check_condition(None, "not_null", "") is False
+    def test_time_unparseable(self):
+        assert _check_condition("abc", "time", ">", "2024-01-15") is False
 
-    def test_eq_numeric_float(self):
-        assert _check_condition(25.0, "==", "25") is True
-        assert _check_condition(25.5, "==", "25") is False
+
+class TestTryDate:
+    def test_dash_with_time(self):
+        assert _try_date("2024-01-15 17:00:00") == datetime(2024, 1, 15, 17, 0, 0)
+
+    def test_slash_no_padding(self):
+        assert _try_date("2024/1/15 0:00:00") == datetime(2024, 1, 15, 0, 0, 0)
+
+    def test_no_seconds(self):
+        assert _try_date("2024-01-15 13:02") == datetime(2024, 1, 15, 13, 2)
+
+    def test_leading_apostrophe(self):
+        assert _try_date("'2001-10-08 00:00:00") == datetime(2001, 10, 8, 0, 0, 0)
+
+    def test_compact(self):
+        assert _try_date("20220426") == datetime(2022, 4, 26)
+
+    def test_chinese(self):
+        assert _try_date("2024年5月22日") == datetime(2024, 5, 22)
+
+    def test_date_only(self):
+        assert _try_date("2024-01-15") == datetime(2024, 1, 15)
+
+    def test_invalid(self):
+        assert _try_date("not-a-date") is None
 
 
 class TestFilterRows:
-    def test_any_mode_delete_if_any_satisfies(self, sample_xlsx):
-        """任意条件满足即删除。只有 Diana(None,60) age 为空不满足<18，其余都满足至少一个。"""
-        out = os.path.join(os.path.dirname(sample_xlsx), "out_any.xlsx")
-        orig, deleted = filter_rows(
+    def test_delete_any(self, sample_xlsx):
+        out = os.path.join(os.path.dirname(sample_xlsx), "out.xlsx")
+        original, kept = filter_rows(
             sample_xlsx, out,
-            [("Age", "<", "18"), ("Score", "<", "60")],
-            delete_mode="any",
+            [("Age", "number", "<", "18"), ("Score", "number", "<", "60")],
+            mode="any", action="delete",
         )
-        assert orig == 5
-        assert deleted == 3  # Bob(17<18), Diana(None→""<"18"), ""(55<60)
+        assert original == 5
+        assert kept == 2
 
-    def test_all_mode_delete_if_all_satisfy(self, sample_xlsx):
-        """全部条件满足才删除。Alice 和 Charlie 年龄>=25 且 City=NY。"""
-        out = os.path.join(os.path.dirname(sample_xlsx), "out_all.xlsx")
-        orig, deleted = filter_rows(
+    def test_delete_all(self, sample_xlsx):
+        out = os.path.join(os.path.dirname(sample_xlsx), "out.xlsx")
+        original, kept = filter_rows(
             sample_xlsx, out,
-            [("Age", ">=", "25"), ("City", "==", "NY")],
-            delete_mode="all",
+            [("Age", "number", ">=", "25"), ("City", "number", "==", "NY")],
+            mode="all", action="delete",
         )
-        assert orig == 5
-        assert deleted == 2  # Alice(25,NY), Charlie(30,NY)
+        assert original == 5
+        assert kept == 3
 
-    def test_output_columns_preserved(self, sample_xlsx):
-        out = os.path.join(os.path.dirname(sample_xlsx), "out_cols.xlsx")
-        filter_rows(sample_xlsx, out, [("Age", "<", "1")], delete_mode="any")
-        h, _ = read_table(out)
-        assert h == HEADERS
+    def test_keep_any(self, sample_xlsx):
+        out = os.path.join(os.path.dirname(sample_xlsx), "out.xlsx")
+        original, kept = filter_rows(
+            sample_xlsx, out,
+            [("Age", "number", "<", "18"), ("Score", "number", "<", "60")],
+            mode="any", action="keep",
+        )
+        assert original == 5
+        assert kept == 3
+
+    def test_keep_all(self, sample_xlsx):
+        out = os.path.join(os.path.dirname(sample_xlsx), "out.xlsx")
+        original, kept = filter_rows(
+            sample_xlsx, out,
+            [("Age", "number", ">=", "25"), ("City", "number", "==", "NY")],
+            mode="all", action="keep",
+        )
+        assert original == 5
+        assert kept == 2
 
     def test_csv_output(self, sample_xlsx):
         out = os.path.join(os.path.dirname(sample_xlsx), "out.csv")
-        filter_rows(sample_xlsx, out, [("Age", "<", "1")], delete_mode="any")
+        original, kept = filter_rows(
+            sample_xlsx, out,
+            [("Age", "number", "<", "1")],
+            mode="any", action="delete",
+        )
         assert os.path.exists(out)
 
     def test_column_not_found(self, sample_xlsx):
-        out = os.path.join(os.path.dirname(sample_xlsx), "out_err.xlsx")
+        out = os.path.join(os.path.dirname(sample_xlsx), "out.xlsx")
         with pytest.raises(ValueError, match="不存在"):
-            filter_rows(sample_xlsx, out, [("Unknown", ">", "1")], delete_mode="any")
+            filter_rows(sample_xlsx, out, [("Unknown", "number", ">", "1")], "any", "delete")
+
+    def test_time_filter(self, tmp_path):
+        h = ["Name", "Time"]
+        r = [
+            ["a", "2024-01-15 17:00:00"],
+            ["b", "2024-01-16 00:00:00"],
+            ["c", "2024-01-14 00:00:00"],
+        ]
+        p = os.path.join(tmp_path, "t.xlsx")
+        _make_xlsx(h, r, p)
+        out = os.path.join(tmp_path, "t_out.xlsx")
+        original, kept = filter_rows(
+            p, out,
+            [("Time", "time", ">", "2024-01-15 00:00:00")],
+            mode="any", action="delete",
+        )
+        assert original == 3
+        assert kept == 1
